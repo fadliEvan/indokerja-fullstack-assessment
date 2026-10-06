@@ -1,0 +1,118 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Role {
+  JOB_SEEKER
+  COMPANY
+}
+
+enum JobType {
+  FULL_TIME
+  PART_TIME
+  CONTRACT
+  REMOTE
+}
+
+enum JobStatus {
+  OPEN
+  CLOSED
+}
+
+enum ApplicationStatus {
+  APPLIED
+  REVIEWING
+  SHORTLISTED
+  REJECTED
+  ACCEPTED
+}
+
+model User {
+  id              String               @id @default(uuid())
+  email           String               @unique
+  passwordHash    String
+  fullName        String
+  phone           String?
+  role            Role
+  companyProfile  CompanyProfile?
+  applications    Application[]        @relation("SeekerApplications")
+  historyChanges  ApplicationHistory[] @relation("ChangedByUser")
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+
+  @@index([email])
+}
+
+model CompanyProfile {
+  id          String       @id @default(uuid())
+  userId      String       @unique
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  companyName String
+  industry    String?
+  location    String?
+  description String?      @db.Text
+  website     String?
+  jobs        JobVacancy[]
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  @@index([userId])
+}
+
+model JobVacancy {
+  id           String         @id @default(uuid())
+  companyId    String
+  company      CompanyProfile @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  title        String
+  description  String         @db.Text
+  requirements String         @db.Text
+  location     String
+  jobType      JobType        @default(FULL_TIME)
+  salaryMin    Int?
+  salaryMax    Int?
+  isNegotiable Boolean        @default(false)
+  status       JobStatus      @default(OPEN)
+  applications Application[]
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  @@index([companyId])
+  @@index([status])
+}
+
+model Application {
+  id        String               @id @default(uuid())
+  jobId     String
+  job       JobVacancy           @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  seekerId  String
+  seeker    User                 @relation("SeekerApplications", fields: [seekerId], references: [id], onDelete: Cascade)
+  coverNote String?              @db.Text
+  resumeUrl String?
+  status    ApplicationStatus    @default(APPLIED)
+  history   ApplicationHistory[]
+  createdAt DateTime             @default(now())
+  updatedAt DateTime             @updatedAt
+
+  @@unique([jobId, seekerId]) // Single application per job per seeker
+  @@index([jobId])
+  @@index([seekerId])
+}
+
+model ApplicationHistory {
+  id             String             @id @default(uuid())
+  applicationId  String
+  application    Application        @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  previousStatus ApplicationStatus?
+  newStatus      ApplicationStatus
+  changedById    String
+  changedBy      User               @relation("ChangedByUser", fields: [changedById], references: [id])
+  note           String?            @db.Text
+  createdAt      DateTime           @default(now())
+
+  @@index([applicationId])
+}
